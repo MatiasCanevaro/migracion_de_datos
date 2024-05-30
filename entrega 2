@@ -1,7 +1,7 @@
 USE [GD1C2024]
 GO
---CREATE SCHEMA FURIOUS_QUERYING
---GO
+CREATE SCHEMA FURIOUS_QUERYING
+GO
 --===================================================TABLAS=================================================================== 
 CREATE TABLE FURIOUS_QUERYING.CLIENTE(
 id DECIMAL(18,0) primary key not null identity(1,1),

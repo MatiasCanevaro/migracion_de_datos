@@ -20,7 +20,7 @@ provincia_id DECIMAL(18,0) not null
 CREATE TABLE FURIOUS_QUERYING.PAGO(
 numero DECIMAL(18,0) primary key not null identity(1,1),
 fecha_y_hora DATETIME not null,
-detalle_pago_id DECIMAL(18,0) not null,
+detalle_pago_id DECIMAL(18,0) null,
 medio_de_pago_codigo DECIMAL(18,0) not null,
 ticket_numero DECIMAL(18,0) not null,
 importe DECIMAL(18,0) not null,
@@ -28,7 +28,6 @@ descuento_aplicado DECIMAL(18,0) null,
 descuento_codigo DECIMAL(18,0) null,
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
-caja_numero DECIMAL(18,0) not null,
 ticket_fecha_y_hora DATETIME not null
 )
 
@@ -69,11 +68,6 @@ porcentaje_descuento DECIMAL(18,0) not null,
 tope DECIMAL(18,0) null
 )
 
-CREATE TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO(
-pago_numero DECIMAL(18,0) not null,
-descuento_codigo DECIMAL(18,0) not null
-)
-
 CREATE TABLE FURIOUS_QUERYING.TICKET(
 numero DECIMAL(18,0) not null,
 fecha_y_hora DATETIME not null,
@@ -107,7 +101,6 @@ ticket_numero DECIMAL(18,0) not null,
 cliente_id DECIMAL(18,0) not null,
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
-caja_numero DECIMAL(18,0) not null,
 ticket_fecha_y_hora DATETIME not null
 )
 
@@ -124,7 +117,6 @@ precio_unitario DECIMAL(18,2),
 total DECIMAL(18,2),
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
-caja_numero DECIMAL(18,0) not null,
 ticket_fecha_y_hora DATETIME not null
 )
 
@@ -135,7 +127,6 @@ ticket_numero DECIMAL(18,0) not null,
 promo_aplicada_descuento DECIMAL(18,2),
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
-caja_numero DECIMAL(18,0) not null,
 ticket_fecha_y_hora DATETIME not null
 )
 
@@ -242,20 +233,19 @@ provincia_id DECIMAL(18,0) not null
 )
 --===================================================PRIMARY KEYS============================================================= 
 ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO add constraint pk_descuento_por_medio_de_pago primary key (medio_de_pago_codigo,descuento_codigo) 
-ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint pk_descuento_por_pago primary key (pago_numero,descuento_codigo) 
-ALTER TABLE FURIOUS_QUERYING.ITEM add constraint pk_item primary key (producto_id, ticket_numero, tipo_comprobante_id,sucursal_nombre, caja_numero, ticket_fecha_y_hora) 
-ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint pk_item_x_promocion primary key (producto_id,ticket_numero,codigo_promocion, caja_numero, tipo_comprobante_id, sucursal_nombre, ticket_fecha_y_hora) 
+ALTER TABLE FURIOUS_QUERYING.ITEM add constraint pk_item primary key (producto_id, ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora) 
+ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint pk_item_x_promocion primary key (producto_id,ticket_numero,codigo_promocion, tipo_comprobante_id, sucursal_nombre, ticket_fecha_y_hora) 
 ALTER TABLE FURIOUS_QUERYING.SUBCATEGORIA add constraint pk_subcategoria primary key (id,categoria_id) 
 ALTER TABLE FURIOUS_QUERYING.CAJA add constraint pk_caja primary key (numero,sucursal_nombre)
-ALTER TABLE FURIOUS_QUERYING.TICKET add constraint pk_ticket primary key (numero, tipo_comprobante_id,sucursal_nombre, caja_numero,fecha_y_hora) 
+ALTER TABLE FURIOUS_QUERYING.TICKET add constraint pk_ticket primary key (numero, tipo_comprobante_id,sucursal_nombre, fecha_y_hora) 
 --===================================================FOREIGN KEYS=============================================================
 ALTER TABLE FURIOUS_QUERYING.CLIENTE add constraint fk_provincia_por_cliente foreign key (provincia_id) references FURIOUS_QUERYING.PROVINCIA (id)
 ALTER TABLE FURIOUS_QUERYING.CLIENTE add constraint fk_localidad_por_cliente foreign key (localidad_id) references FURIOUS_QUERYING.LOCALIDAD (id)
 
 ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_detalle_pago foreign key (detalle_pago_id) references FURIOUS_QUERYING.DETALLE_PAGO (id)
 ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_medio_de_pago foreign key (medio_de_pago_codigo) references FURIOUS_QUERYING.MEDIO_DE_PAGO (codigo)
-ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_ticket foreign key (ticket_numero, tipo_comprobante_id,sucursal_nombre, caja_numero, ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id, sucursal_nombre, caja_numero, fecha_y_hora)
-
+ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_ticket foreign key (ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id, sucursal_nombre, fecha_y_hora)
+ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_descuento foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
 
 ALTER TABLE FURIOUS_QUERYING.DETALLE_PAGO add constraint fk_cliente_id_por_detalle_pago foreign key (cliente_id) references FURIOUS_QUERYING.CLIENTE (id)
 ALTER TABLE FURIOUS_QUERYING.DETALLE_PAGO add constraint fk_tarjeta_numero foreign key (tarjeta_numero) references FURIOUS_QUERYING.TARJETA (numero)
@@ -265,23 +255,20 @@ ALTER TABLE FURIOUS_QUERYING.MEDIO_DE_PAGO add constraint fk_tipo_medio_de_pago_
 ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO add constraint fk_medio_de_pago_codigo foreign key (medio_de_pago_codigo) references FURIOUS_QUERYING.MEDIO_DE_PAGO (codigo)
 ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO add constraint fk_descuento_codigo_por_medio_de_pago foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
 
-ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint fk_pago_numero foreign key (pago_numero) references FURIOUS_QUERYING.PAGO (numero)
-ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint fk_descuento_codigo_por_pago foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
-
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_sucursal_nombre_por_ticket foreign key (sucursal_nombre) references FURIOUS_QUERYING.SUCURSAL (nombre)
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_caja foreign key (caja_numero,sucursal_nombre) references FURIOUS_QUERYING.CAJA (numero,sucursal_nombre)
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_empleado_id foreign key (empleado_id) references FURIOUS_QUERYING.EMPLEADO (id)
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_tipo_comprobante_id foreign key (tipo_comprobante_id) references FURIOUS_QUERYING.TIPO_COMPROBANTE (id)
 
 ALTER TABLE FURIOUS_QUERYING.ENVIO add constraint fk_estado_envio_id foreign key (estado_envio_id) references FURIOUS_QUERYING.ESTADO_ENVIO (id)
-ALTER TABLE FURIOUS_QUERYING.ENVIO add constraint fk_ticket_numero_por_envio foreign key (ticket_numero, tipo_comprobante_id,sucursal_nombre, caja_numero, ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id,sucursal_nombre, caja_numero, fecha_y_hora )
+ALTER TABLE FURIOUS_QUERYING.ENVIO add constraint fk_ticket_numero_por_envio foreign key (ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id,sucursal_nombre, fecha_y_hora )
 ALTER TABLE FURIOUS_QUERYING.ENVIO add constraint fk_cliente_id_por_envio foreign key (cliente_id) references FURIOUS_QUERYING.CLIENTE (id)
 
 ALTER TABLE FURIOUS_QUERYING.ITEM add constraint fk_producto_id_por_item foreign key (producto_id) references FURIOUS_QUERYING.PRODUCTO (id)
-ALTER TABLE FURIOUS_QUERYING.ITEM add constraint fk_ticket_numero_por_item foreign key (ticket_numero, tipo_comprobante_id, sucursal_nombre, caja_numero,ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id,sucursal_nombre, caja_numero,fecha_y_hora)
+ALTER TABLE FURIOUS_QUERYING.ITEM add constraint fk_ticket_numero_por_item foreign key (ticket_numero, tipo_comprobante_id, sucursal_nombre,ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id,sucursal_nombre,fecha_y_hora)
 
 ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint fk_codigo_promocion foreign key (codigo_promocion) references FURIOUS_QUERYING.PROMOCION (codigo)
-ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint fk_item foreign key (producto_id,ticket_numero, tipo_comprobante_id,sucursal_nombre, caja_numero, ticket_fecha_y_hora) references FURIOUS_QUERYING.ITEM (producto_id,ticket_numero, tipo_comprobante_id,sucursal_nombre, caja_numero, ticket_fecha_y_hora)
+ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint fk_item foreign key (producto_id,ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora) references FURIOUS_QUERYING.ITEM (producto_id,ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora)
 
 ALTER TABLE FURIOUS_QUERYING.SUCURSAL add constraint fk_localidad_id_por_sucursal foreign key (localidad_id) references FURIOUS_QUERYING.LOCALIDAD (id)
 ALTER TABLE FURIOUS_QUERYING.SUCURSAL add constraint fk_supermercado_id foreign key (supermercado_id) references FURIOUS_QUERYING.SUPERMERCADO (cuit)
@@ -493,35 +480,34 @@ AS BEGIN
 INSERT INTO FURIOUS_QUERYING.TICKET(numero,fecha_y_hora, subtotal_productos, descuento_promociones_total, descuento_medio_de_pago_total, 
                                     total_envio, total, sucursal_nombre, caja_numero, empleado_id, tipo_comprobante_id)
                             SELECT DISTINCT TICKET_NUMERO, TICKET_FECHA_HORA, TICKET_SUBTOTAL_PRODUCTOS, TICKET_TOTAL_DESCUENTO_APLICADO, TICKET_TOTAL_DESCUENTO_APLICADO_MP,
-                            TICKET_TOTAL_ENVIO, TICKET_TOTAL_TICKET, Maestra.SUCURSAL_NOMBRE, CAJA_NUMERO, e.id, tc.id
+                            TICKET_TOTAL_ENVIO, TICKET_TOTAL_TICKET, Maestra.SUCURSAL_NOMBRE, CAJA_NUMERO, e.id,tc.id
                             FROM gd_esquema.Maestra
-                            JOIN FURIOUS_QUERYING.EMPLEADO e ON e.dni= EMPLEADO_DNI  AND e.NOMBRE= EMPLEADO_NOMBRE
-                            JOIN FURIOUS_QUERYING.TIPO_COMPROBANTE tc ON tc.tipo_comprobante= TIPO_COMPROBANTE     
+                            JOIN FURIOUS_QUERYING.EMPLEADO e ON e.dni= EMPLEADO_DNI AND e.NOMBRE = EMPLEADO_NOMBRE
+                            JOIN FURIOUS_QUERYING.TIPO_COMPROBANTE tc ON tc.tipo_comprobante = TICKET_TIPO_COMPROBANTE
                             WHERE TICKET_NUMERO IS NOT NULL
-							
 END
 
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_ENVIO
 AS BEGIN
 INSERT INTO FURIOUS_QUERYING.ENVIO(fecha_programada,fecha_entrega,hora_inicio_programada,hora_fin_programada,costo,
-                                    estado_envio_id,ticket_numero, cliente_id, tipo_comprobante_id, caja_numero, ticket_fecha_y_hora, sucursal_nombre)
+                                    estado_envio_id,ticket_numero, cliente_id, tipo_comprobante_id, ticket_fecha_y_hora, sucursal_nombre)
                             SELECT DISTINCT ENVIO_FECHA_PROGRAMADA, ENVIO_FECHA_ENTREGA, ENVIO_HORA_INICIO, ENVIO_HORA_FIN,ENVIO_COSTO, 
-                            ee.id, TICKET_NUMERO, c.id, tp.id, CAJA_NUMERO, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
+                            ee.id, TICKET_NUMERO, c.id, tp.id, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
                             FROM gd_esquema.Maestra
                             JOIN FURIOUS_QUERYING.ESTADO_ENVIO ee ON ee.estado = ENVIO_ESTADO
                             JOIN FURIOUS_QUERYING.CLIENTE c ON c.dni = CLIENTE_DNI
 							JOIN FURIOUS_QUERYING.TIPO_COMPROBANTE tp ON tp.tipo_comprobante = TICKET_TIPO_COMPROBANTE
-                            WHERE ENVIO_FECHA_PROGRAMADA IS NOT NULL AND CAJA_NUMERO IS NOT NULL          
+                            WHERE ENVIO_FECHA_PROGRAMADA IS NOT NULL         
 END
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DETALLE_PAGO
 AS BEGIN
 INSERT INTO FURIOUS_QUERYING.DETALLE_PAGO(cliente_id, tarjeta_numero, cuotas)
-                            SELECT DISTINCT c.id, PAGO_TARJETA_NRO, PAGO_TARJETA_CUOTAS 
-                            FROM gd_esquema.Maestra
-                            JOIN FURIOUS_QUERYING.CLIENTE c ON c.dni = CLIENTE_DNI
-                            WHERE PAGO_FECHA IS NOT NULL           
+                            SELECT c.id, ma.PAGO_TARJETA_NRO, ma.PAGO_TARJETA_CUOTAS  FROM gd_esquema.Maestra ma
+							JOIN gd_esquema.Maestra M ON (ma.TICKET_NUMERO = m.TICKET_NUMERO AND m.CLIENTE_DNI is not null)
+							JOIN FURIOUS_QUERYING.CLIENTE c ON (c.dni = m.CLIENTE_DNI)
+							WHERE ma.PAGO_FECHA IS NOT NULL and ma.PAGO_TARJETA_NRO is not null	
 END
 
 GO
@@ -538,12 +524,13 @@ GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_PAGO
 AS BEGIN
 INSERT INTO FURIOUS_QUERYING.PAGO(fecha_y_hora,detalle_pago_id,medio_de_pago_codigo,ticket_numero,importe,descuento_aplicado, 
-								tipo_comprobante_id, sucursal_nombre, caja_numero, ticket_fecha_y_hora)
-                            SELECT DISTINCT PAGO_FECHA, dp.id ,mp.codigo, TICKET_NUMERO ,PAGO_IMPORTE,PAGO_DESCUENTO_APLICADO, TICKET_TIPO_COMPROBANTE, 
-							SUCURSAL_NOMBRE, CAJA_NUMERO, TICKET_FECHA_HORA
+								tipo_comprobante_id, sucursal_nombre, ticket_fecha_y_hora)
+                            SELECT DISTINCT PAGO_FECHA, dp.id ,mp.codigo, TICKET_NUMERO ,PAGO_IMPORTE,PAGO_DESCUENTO_APLICADO,tp.id, 
+							SUCURSAL_NOMBRE, TICKET_FECHA_HORA
                             FROM gd_esquema.Maestra
-                            JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.tarjeta_numero = PAGO_TARJETA_NRO
+                            LEFT JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.tarjeta_numero = PAGO_TARJETA_NRO
                             JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.descripcion = PAGO_MEDIO_PAGO
+							JOIN FURIOUS_QUERYING.TIPO_COMPROBANTE tp ON tp.tipo_comprobante=TICKET_TIPO_COMPROBANTE
                             WHERE PAGO_FECHA IS NOT NULL
 END
 
@@ -559,22 +546,10 @@ INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO(medio_de_pago_codigo, d
 END
 
 GO
-CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
-AS BEGIN
-INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_PAGO(pago_numero, descuento_codigo)
-                            SELECT DISTINCT p.numero, d.codigo
-                            FROM gd_esquema.Maestra
-                            JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.descripcion = PAGO_MEDIO_PAGO
-                            JOIN FURIOUS_QUERYING.PAGO p ON p.ticket_numero = gd_esquema.Maestra.TICKET_NUMERO AND p.medio_de_pago_codigo = mp.codigo
-                            JOIN FURIOUS_QUERYING.DESCUENTO d ON d.descripcion = DESCUENTO_DESCRIPCION
-                            WHERE PAGO_FECHA IS NOT NULL
-END
-
-GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_ITEM
 AS BEGIN
-INSERT INTO FURIOUS_QUERYING.ITEM(producto_id, ticket_numero, cantidad, precio_unitario, total, tipo_comprobante_id, caja_numero, ticket_fecha_y_hora, sucursal_nombre)
-                            SELECT DISTINCT p.id, TICKET_NUMERO, TICKET_DET_CANTIDAD,  TICKET_DET_PRECIO, TICKET_DET_TOTAL, tp.id, CAJA_NUMERO, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
+INSERT INTO FURIOUS_QUERYING.ITEM(producto_id, ticket_numero, cantidad, precio_unitario, total, tipo_comprobante_id, ticket_fecha_y_hora, sucursal_nombre)
+                            SELECT DISTINCT p.id, TICKET_NUMERO, TICKET_DET_CANTIDAD,  TICKET_DET_PRECIO, TICKET_DET_TOTAL, tp.id, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
                             FROM gd_esquema.Maestra
                             JOIN FURIOUS_QUERYING.MARCA m ON m.marca = PRODUCTO_MARCA
                             JOIN FURIOUS_QUERYING.PRODUCTO p ON p.nombre = PRODUCTO_NOMBRE AND p.id = m.id 
@@ -586,8 +561,8 @@ END
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_ITEM_X_PROMOCION
 AS BEGIN
-INSERT INTO FURIOUS_QUERYING.ITEM_X_PROMOCION(codigo_promocion,producto_id,ticket_numero,promo_aplicada_descuento, tipo_comprobante_id, caja_numero, ticket_fecha_y_hora, sucursal_nombre)
-                            SELECT DISTINCT PROMO_CODIGO,p.id, TICKET_NUMERO, PROMO_APLICADA_DESCUENTO, tp.id, CAJA_NUMERO, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
+INSERT INTO FURIOUS_QUERYING.ITEM_X_PROMOCION(codigo_promocion,producto_id,ticket_numero,promo_aplicada_descuento, tipo_comprobante_id, ticket_fecha_y_hora, sucursal_nombre)
+                            SELECT DISTINCT PROMO_CODIGO,p.id, TICKET_NUMERO, PROMO_APLICADA_DESCUENTO, tp.id, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
                             FROM gd_esquema.Maestra
                             JOIN FURIOUS_QUERYING.MARCA m ON m.marca = PRODUCTO_MARCA
                             JOIN FURIOUS_QUERYING.producto p ON p.nombre = PRODUCTO_NOMBRE AND p.id = m.id 
@@ -634,7 +609,5 @@ EXEC FURIOUS_QUERYING.MIGRAR_DETALLE_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_MEDIO_DE_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_MEDIO_DE_PAGO;
-EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM_X_PROMOCION;
-

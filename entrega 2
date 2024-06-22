@@ -121,6 +121,7 @@ producto_id DECIMAL(18,0) not null,
 ticket_numero DECIMAL(18,0) not null,
 cantidad DECIMAL(18,0),
 precio_unitario DECIMAL(18,2),
+total DECIMAL(18,2),
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
 caja_numero DECIMAL(18,0) not null,
@@ -499,7 +500,7 @@ INSERT INTO FURIOUS_QUERYING.TICKET(numero,fecha_y_hora, subtotal_productos, des
                             WHERE TICKET_NUMERO IS NOT NULL
 							
 END
-						
+
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_ENVIO
 AS BEGIN
@@ -572,8 +573,8 @@ END
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_ITEM
 AS BEGIN
-INSERT INTO FURIOUS_QUERYING.ITEM(producto_id, ticket_numero, cantidad, precio_unitario, tipo_comprobante_id, caja_numero, ticket_fecha_y_hora, sucursal_nombre)
-                            SELECT DISTINCT p.id, TICKET_NUMERO, TICKET_DET_CANTIDAD,  TICKET_DET_PRECIO, tp.id, CAJA_NUMERO, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
+INSERT INTO FURIOUS_QUERYING.ITEM(producto_id, ticket_numero, cantidad, precio_unitario, total, tipo_comprobante_id, caja_numero, ticket_fecha_y_hora, sucursal_nombre)
+                            SELECT DISTINCT p.id, TICKET_NUMERO, TICKET_DET_CANTIDAD,  TICKET_DET_PRECIO, TICKET_DET_TOTAL, tp.id, CAJA_NUMERO, TICKET_FECHA_HORA, SUCURSAL_NOMBRE
                             FROM gd_esquema.Maestra
                             JOIN FURIOUS_QUERYING.MARCA m ON m.marca = PRODUCTO_MARCA
                             JOIN FURIOUS_QUERYING.PRODUCTO p ON p.nombre = PRODUCTO_NOMBRE AND p.id = m.id 
@@ -636,3 +637,4 @@ EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_MEDIO_DE_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM_X_PROMOCION;
+

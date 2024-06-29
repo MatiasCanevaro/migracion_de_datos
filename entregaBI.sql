@@ -74,8 +74,8 @@ CREATE TABLE FURIOUS_QUERYING.BI_TICKET
     tipo_comprobante_id DECIMAL(18,0),
     sucursal_nombre VARCHAR(255),
     tipo_caja VARCHAR(255),
-    FOREIGN KEY (numero_ticket,fecha_y_hora,tipo_comprobante_id,sucursal_nombre) 
-    REFERENCES FURIOUS_QUERYING.TICKET(numero,fecha_y_hora,tipo_comprobante_id,sucursal_nombre)
+    FOREIGN KEY (numero_ticket,tipo_comprobante_id,sucursal_nombre, fecha_y_hora) 
+    REFERENCES FURIOUS_QUERYING.TICKET(numero, tipo_comprobante_id,sucursal_nombre, fecha_y_hora)
 );
 
 CREATE TABLE FURIOUS_QUERYING.BI_VENTA
@@ -88,10 +88,11 @@ CREATE TABLE FURIOUS_QUERYING.BI_VENTA
     rango_etario_cliente_id DECIMAL(18,0),
     rango_etario_empleado_id DECIMAL(18,0),
     turno_id DECIMAL(18,0),
-    medio_de_pago_id DECIMAL(18,0),
     envio_id DECIMAL(18,0),
     ticket_id DECIMAL(18,0),
     cantidad DECIMAL(18,0),
+    descuento_aplicado_mp DECIMAL(18,2),
+    descuento_aplicado_promociones DECIMAL(18,2),
     total DECIMAL(18,2),
     FOREIGN KEY (tiempo_id) REFERENCES FURIOUS_QUERYING.BI_TIEMPO(id),
     FOREIGN KEY (ubicacion_id) REFERENCES FURIOUS_QUERYING.BI_UBICACION(id),
@@ -100,7 +101,6 @@ CREATE TABLE FURIOUS_QUERYING.BI_VENTA
     FOREIGN KEY (rango_etario_cliente_id) REFERENCES FURIOUS_QUERYING.BI_RANGO_ETARIO(id),
     FOREIGN KEY (rango_etario_empleado_id) REFERENCES FURIOUS_QUERYING.BI_RANGO_ETARIO(id),
     FOREIGN KEY (turno_id) REFERENCES FURIOUS_QUERYING.BI_TURNO(id),
-    FOREIGN KEY (medio_de_pago_id) REFERENCES FURIOUS_QUERYING.BI_MEDIO_DE_PAGO(id),
     FOREIGN KEY (envio_id) REFERENCES FURIOUS_QUERYING.BI_ENVIO(id),
     FOREIGN KEY (ticket_id) REFERENCES FURIOUS_QUERYING.BI_TICKET(id),
 );
@@ -117,7 +117,19 @@ CREATE TABLE FURIOUS_QUERYING.BI_VENTA_X_ITEM
     FOREIGN KEY (marca_id) REFERENCES FURIOUS_QUERYING.MARCA(id),
     FOREIGN KEY (venta_id) REFERENCES FURIOUS_QUERYING.BI_VENTA(id)
 )
---===================================================STORED PROCEDURES============================================================= 
+
+CREATE TABLE FURIOUS_QUERYING.BI_VENTA_X_MEDIO_PAGO
+(
+    venta_id DECIMAL(18,0),
+    medio_de_pago_id DECIMAL(18,0),
+    cuotas DECIMAL(18,0),
+    importe DECIMAL(18,2),
+    descuento_aplicado DECIMAL(18,2),
+    PRIMARY KEY (venta_id, medio_de_pago_id),
+    FOREIGN KEY (venta_id) REFERENCES FURIOUS_QUERYING.BI_VENTA(id),
+    FOREIGN KEY (medio_de_pago_id) REFERENCES FURIOUS_QUERYING.BI_MEDIO_DE_PAGO(id)
+)
+--==================================================STORED PROCEDURES============================================================= 
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_TIEMPO
 AS
@@ -197,7 +209,6 @@ BEGIN
         ('Otros')
 END
 
-
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_MEDIO_DE_PAGO
 AS
@@ -206,7 +217,6 @@ BEGIN
         (descripcion, tipo_medio_de_pago_id)
     SELECT DISTINCT descripcion, tipo_medio_de_pago_id
     FROM FURIOUS_QUERYING.MEDIO_DE_PAGO
-
 END
 
 GO
@@ -351,10 +361,11 @@ BEGIN
         rango_etario_cliente_id,
         rango_etario_empleado_id ,
         turno_id,
-        medio_de_pago_id,
         envio_id,
         ticket_id,
         cantidad,
+        descuento_aplicado_mp,
+        descuento_aplicado_promociones,
         total
         )
     SELECT
@@ -365,17 +376,16 @@ BEGIN
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(e.fecha_nacimiento),
         FURIOUS_QUERYING.BI_SELECT_TURNO(t.fecha_y_hora),
-        bmp.id,
         be.id,
         bt.id,
         FURIOUS_QUERYING.CANTIDAD_ITEMS(t.numero,t.sucursal_nombre,t.tipo_comprobante_id,t.fecha_y_hora),
+        t.descuento_medio_de_pago_total,
+        t.descuento_promociones_total,
         t.total
     FROM FURIOUS_QUERYING.TICKET t
         JOIN FURIOUS_QUERYING.EMPLEADO e on e.id=t.empleado_id
         JOIN FURIOUS_QUERYING.PAGO p on p.ticket_numero = t.numero AND p.ticket_fecha_y_hora=t.fecha_y_hora AND p.tipo_comprobante_id=t.tipo_comprobante_id AND p.sucursal_nombre=t.sucursal_nombre
         JOIN FURIOUS_QUERYING.DETALLE_PAGO dt on dt.id=p.detalle_pago_id
-        JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.codigo = p.medio_de_pago_codigo
-        JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO bmp ON bmp.tipo_medio_de_pago_id = mp.tipo_medio_de_pago_id
         JOIN FURIOUS_QUERYING.CLIENTE c on c.id=dt.cliente_id
         JOIN FURIOUS_QUERYING.ENVIO en ON en.ticket_numero = t.numero AND en.sucursal_nombre = t.sucursal_nombre AND en.tipo_comprobante_id=t.tipo_comprobante_id AND en.ticket_fecha_y_hora=t.fecha_y_hora
         JOIN FURIOUS_QUERYING.ESTADO_ENVIO est ON est.id = en.estado_envio_id
@@ -384,8 +394,6 @@ BEGIN
         JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = t.sucursal_nombre
 END
     
-    
-
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_VENTA_X_ITEM
 AS
@@ -402,22 +410,59 @@ BEGIN
     GROUP BY v.id,p.categoria_id,p.subcategoria_id, p.marca_id
 END
 
+
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_VENTA_X_MEDIO_PAGO
+AS
+BEGIN
+    INSERT INTO FURIOUS_QUERYING.BI_VENTA_X_MEDIO_PAGO
+        (venta_id, medio_de_pago_id, cuotas, importe, descuento_aplicado)
+    SELECT DISTINCT v.id, p.medio_de_pago_codigo, dp.cuotas, p.importe, p.descuento_aplicado 
+	FROM FURIOUS_QUERYING.BI_VENTA v
+    JOIN FURIOUS_QUERYING.BI_TICKET bt ON bt.id = v.ticket_id
+    JOIN FURIOUS_QUERYING.PAGO p ON p.ticket_numero=bt.numero_ticket AND p.sucursal_nombre=bt.sucursal_nombre AND p.ticket_fecha_y_hora=bt.fecha_y_hora AND p.tipo_comprobante_id=bt.tipo_comprobante_id
+    JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.id = p.detalle_pago_id
+END
 --===================================================EXECS============================================================= 
 
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_TIEMPO
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_UBICACION
+
+GO
 EXEC FURIOUS_QUERYING.BI_MIGRAR_SUCURSAL
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_RANGO_ETARIO
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_TURNOS
+
+GO
 EXEC FURIOUS_QUERYING.BI_MIGRAR_MEDIO_DE_PAGO
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_CATEGORIA_SUBCATEGORIA
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_BI_ENVIO
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_BI_TICKET
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_VENTA
+
+GO
 EXEC FURIOUS_QUERYING.MIGRAR_VENTA_X_ITEM
 
+GO
+EXEC FURIOUS_QUERYING.MIGRAR_VENTA_X_MEDIO_PAGO
+
 --===================================================VISTAS============================================================= 
---Ticket Promedio mensual. Valor promedio de las ventas (en $) según la
+--1: Ticket Promedio mensual. Valor promedio de las ventas (en $) según la
 --localidad, año y mes. Se calcula en función de la sumatoria del importe de las
 --ventas sobre el total de las mismas.
 
@@ -429,8 +474,7 @@ AS
         JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)
     GROUP BY u.nombre_localidad,t.anio,t.mes
 
-
---Cantidad unidades promedio. Cantidad promedio de artículos que se venden
+--2: Cantidad unidades promedio. Cantidad promedio de artículos que se venden
 --en función de los tickets según el turno para cada cuatrimestre de cada año. Se
 --obtiene sumando la cantidad de artículos de todos los tickets correspondientes
 --sobre la cantidad de tickets. Si un producto tiene más de una unidad en un ticket,
@@ -445,8 +489,8 @@ AS
         JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON ti.id = v.tiempo_id
     GROUP BY t.turno, ti.cuatrimestre, ti.anio
 
-
---Porcentaje anual de ventas registradas por rango etario del empleado según el
+	
+--3: Porcentaje anual de ventas registradas por rango etario del empleado según el
 --tipo de caja para cada cuatrimestre. Se calcula tomando la cantidad de ventas
 --correspondientes sobre el total de ventas anual.
 
@@ -462,9 +506,7 @@ AS
         JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON ti.id=v.tiempo_id
     GROUP BY r.rango,t.tipo_caja,ti.cuatrimestre, ti.anio
 
-/*
-Cantidad  de  ventas  registradas  por  turno  para  cada  localidad  según  el  mes  de cada año. 
-*/
+--4: Cantidad  de  ventas  registradas  por  turno  para  cada  localidad  según  el  mes  de cada año. 
 
 GO
 CREATE VIEW FURIOUS_QUERYING.CANTIDAD_VENTAS_POR_TURNO
@@ -475,18 +517,17 @@ AS
         JOIN FURIOUS_QUERYING.BI_TIEMPO t ON t.id = v.tiempo_id
         JOIN FURIOUS_QUERYING.BI_TURNO tu ON tu.id = v.turno_id
     GROUP BY u.nombre_localidad, t.mes, t.anio,tu.turno
-
---Porcentaje de descuento aplicados en función del total de los tickets según el mes de cada año
+	
+--5: Porcentaje de descuento aplicados en función del total de los tickets según el mes de cada año
 
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_DESCUENTO
 AS
-    SELECT (SUM(vxt.descuento_aplicado) * 100) / SUM(v.total) AS PorcentajeDescuento, tiempo.mes AS Mes, tiempo.anio AS 'Año'
+    SELECT (SUM(v.descuento_aplicado_mp + v.descuento_aplicado_promociones) * 100) / SUM(v.total) AS PorcentajeDescuento, tiempo.mes AS Mes, tiempo.anio AS 'Año'
     FROM FURIOUS_QUERYING.BI_VENTA v JOIN FURIOUS_QUERYING.BI_TIEMPO tiempo ON (v.tiempo_id = tiempo.id)
-        JOIN FURIOUS_QUERYING.BI_VENTA_X_ITEM vxt ON (v.id = vxt.venta_id)
     GROUP BY tiempo.mes, tiempo.anio
-
---Las tres categorías de productos con mayor descuento aplicado a partir de
+	
+--6: Las tres categorías de productos con mayor descuento aplicado a partir de
 --promociones para cada cuatrimestre de cada año.
 
 GO
@@ -506,9 +547,7 @@ AS
     WHERE rn <= 3;
 
 
-/*
-Porcentaje  de  cumplimiento  de  envíos  en  los  tiempos  programados  por sucursal por año/mes (desvío) 
-*/
+--7: Porcentaje  de  cumplimiento  de  envíos  en  los  tiempos  programados  por sucursal por año/mes (desvío) 
 
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_ENVIOS_CUMPLIDOS_A_TIEMPO
@@ -525,9 +564,8 @@ AS
         JOIN FURIOUS_QUERYING.BI_TIEMPO t ON t.id=v.tiempo_id
         JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.id = v.sucursal_id
     GROUP BY s.nombre, t.anio, t.mes; 
-
-
---Cantidad de envíos por rango etario de clientes para cada cuatrimestre de
+	
+--8: Cantidad de envíos por rango etario de clientes para cada cuatrimestre de
 --cada año
 
 GO
@@ -540,8 +578,7 @@ AS
         JOIN FURIOUS_QUERYING.BI_RANGO_ETARIO r ON r.id=v.rango_etario_cliente_id
     GROUP BY r.rango,ti.cuatrimestre,ti.anio
 
-
---9. Las 5 localidades (tomando la localidad del cliente) con mayor costo de envío.
+--9: Las 5 localidades (tomando la localidad del cliente) con mayor costo de envío.
 
 GO
 CREATE VIEW FURIOUS_QUERYING.LOCALIDADES_MAYOR_COSTO_ENVIO
@@ -552,8 +589,8 @@ AS
         JOIN FURIOUS_QUERYING.BI_ENVIO env ON env.id=v.envio_id
     GROUP BY uc.nombre_localidad,env.costo
     ORDER BY env.costo DESC
-
---10. Las 3 sucursales con el mayor importe de pagos en cuotas, según el medio de
+	
+--10: Las 3 sucursales con el mayor importe de pagos en cuotas, según el medio de
 --pago, mes y año. Se calcula sumando los importes totales de todas las ventas en
 --cuotas.
 
@@ -561,35 +598,75 @@ GO
 CREATE VIEW FURIOUS_QUERYING.SUCURSALES_MAYOR_IMPORTE_EN_CUOTAS
 AS
     SELECT TOP 3 s.nombre,
-    --SUM() AS ImporteEnCuotas,
+    SUM(vxm.importe) AS ImporteEnCuotas,
     mp.descripcion AS Descripcion,
-    t.cuatrimestre AS Cuatrimestre,
+    t.mes AS Mes,
     t.anio AS 'Año'
-    FROM FURIOUS_QUERYING.BI_VENTA v JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)
-                                     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON (v.medio_de_pago_id = mp.id)
+    FROM FURIOUS_QUERYING.BI_VENTA v JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)     
+                                     JOIN FURIOUS_QUERYING.BI_VENTA_X_MEDIO_PAGO vxm ON (v.id = vxm.venta_id)
+                                     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON (vxm.medio_de_pago_id = mp.id)
                                      JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON (v.sucursal_id = s.id)
-                                     
-    
---11. Promedio de importe de la cuota en función del rango etareo del cliente.
+    GROUP BY mp.descripcion,t.mes,t.anio,s.nombre
+    ORDER BY SUM(vxm.importe) DESC
+
+--11: Promedio de importe de la cuota en función del rango etareo del cliente.
 
 GO
 CREATE VIEW FURIOUS_QUERYING.PROMEDIO_IMPORTE_CUOTA_POR_RANGO_ETARIO_DEL_CLIENTE
 AS
-    SELECT ,r.rango
-    FROM FURIOUS_QUERYING.BI_VENTA v JOIN FURIOUS_QUERYING.BI_RANGO_ETARIO r ON (v.rango_etario_cliente_id = r.id)
+    SELECT AVG(vmp.importe/vmp.cuotas) AS PromedioImporteDeCuota,r.rango AS RangoEtareo
+    FROM FURIOUS_QUERYING.BI_VENTA v 
+    JOIN FURIOUS_QUERYING.BI_RANGO_ETARIO r ON (v.rango_etario_cliente_id = r.id)
+    JOIN FURIOUS_QUERYING.BI_VENTA_X_MEDIO_PAGO vmp ON (vmp.venta_id = v.id)
+    GROUP BY r.rango
 
-
---12. Porcentaje de descuento aplicado por cada medio de pago en función del valor
+--12: Porcentaje de descuento aplicado por cada medio de pago en función del valor
 --de total de pagos sin el descuento, por cuatrimestre. Es decir, total de descuentos
 --sobre el total de pagos más el total de descuentos.
 
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_DESCUENTO_POR_MEDIO_DE_PAGO
 AS
-    SELECT (SUM(vxt.descuento_aplicado) / SUM(v.total)) + SUM(vxt.descuento_aplicado) AS PorcentajeDescuento,
+    SELECT SUM(vmp.descuento_aplicado) / (SUM(v.total) + SUM(vmp.descuento_aplicado)) * 100  AS PorcentajeDescuento,
     mp.descripcion AS Descripcion,
     t.cuatrimestre AS Cuatrimestre
     FROM FURIOUS_QUERYING.BI_VENTA v JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)
-                                     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON (v.medio_de_pago_id = mp.id)
-                                     JOIN FURIOUS_QUERYING.BI_VENTA_X_ITEM vxt ON (v.id = vxt.venta_id)
+                                     JOIN FURIOUS_QUERYING.BI_VENTA_X_MEDIO_PAGO vmp ON (v.id = vmp.venta_id)
+                                     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON (vmp.medio_de_pago_id = mp.id)
 	GROUP BY mp.descripcion,t.cuatrimestre
+
+GO
+SELECT * FROM FURIOUS_QUERYING.TICKET_PROMEDIO_MENSUAL
+
+GO
+SELECT * FROM FURIOUS_QUERYING.CANTIDAD_UNIDADES_PROMEDIO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.PORCENTAJE_VENTAS_X_RANGO_ETARIO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.CANTIDAD_VENTAS_POR_TURNO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.PORCENTAJE_DESCUENTO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.CATEGORIAS_CON_MAYOR_DESCUENTO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.PORCENTAJE_ENVIOS_CUMPLIDOS_A_TIEMPO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.CANT_ENVIOS_RANGO_ETARIO_CLIENTES
+
+GO
+SELECT * FROM FURIOUS_QUERYING.LOCALIDADES_MAYOR_COSTO_ENVIO
+
+GO
+SELECT * FROM FURIOUS_QUERYING.SUCURSALES_MAYOR_IMPORTE_EN_CUOTAS
+
+GO
+SELECT * FROM FURIOUS_QUERYING.PROMEDIO_IMPORTE_CUOTA_POR_RANGO_ETARIO_DEL_CLIENTE
+
+GO
+SELECT * FROM FURIOUS_QUERYING.PORCENTAJE_DESCUENTO_POR_MEDIO_DE_PAGO

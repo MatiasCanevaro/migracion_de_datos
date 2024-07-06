@@ -25,7 +25,6 @@ medio_de_pago_codigo DECIMAL(18,0) not null,
 ticket_numero DECIMAL(18,0) not null,
 importe DECIMAL(18,0) not null,
 descuento_aplicado DECIMAL(18,0) null,
-descuento_codigo DECIMAL(18,0) null,
 tipo_comprobante_id DECIMAL(18,0) not null,
 sucursal_nombre VARCHAR(255) not null,
 ticket_fecha_y_hora DATETIME not null
@@ -66,6 +65,11 @@ fecha_inicio DATETIME not null,
 fecha_fin DATETIME not null,
 porcentaje_descuento DECIMAL(18,0) not null,
 tope DECIMAL(18,0) null
+)
+
+CREATE TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO(
+descuento_codigo DECIMAL(18,0) not null,
+pago_numero DECIMAL(18,0) not null
 )
 
 CREATE TABLE FURIOUS_QUERYING.TICKET(
@@ -237,7 +241,8 @@ ALTER TABLE FURIOUS_QUERYING.ITEM add constraint pk_item primary key (producto_i
 ALTER TABLE FURIOUS_QUERYING.ITEM_X_PROMOCION add constraint pk_item_x_promocion primary key (producto_id,ticket_numero,codigo_promocion, tipo_comprobante_id, sucursal_nombre, ticket_fecha_y_hora) 
 ALTER TABLE FURIOUS_QUERYING.SUBCATEGORIA add constraint pk_subcategoria primary key (id,categoria_id) 
 ALTER TABLE FURIOUS_QUERYING.CAJA add constraint pk_caja primary key (numero,sucursal_nombre)
-ALTER TABLE FURIOUS_QUERYING.TICKET add constraint pk_ticket primary key (numero, tipo_comprobante_id,sucursal_nombre, fecha_y_hora) 
+ALTER TABLE FURIOUS_QUERYING.TICKET add constraint pk_ticket primary key (numero, tipo_comprobante_id,sucursal_nombre, fecha_y_hora)
+ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint pk_descuento_por_pago primary key(descuento_codigo,pago_numero) 
 --===================================================FOREIGN KEYS=============================================================
 ALTER TABLE FURIOUS_QUERYING.CLIENTE add constraint fk_provincia_por_cliente foreign key (provincia_id) references FURIOUS_QUERYING.PROVINCIA (id)
 ALTER TABLE FURIOUS_QUERYING.CLIENTE add constraint fk_localidad_por_cliente foreign key (localidad_id) references FURIOUS_QUERYING.LOCALIDAD (id)
@@ -245,7 +250,6 @@ ALTER TABLE FURIOUS_QUERYING.CLIENTE add constraint fk_localidad_por_cliente for
 ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_detalle_pago foreign key (detalle_pago_id) references FURIOUS_QUERYING.DETALLE_PAGO (id)
 ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_medio_de_pago foreign key (medio_de_pago_codigo) references FURIOUS_QUERYING.MEDIO_DE_PAGO (codigo)
 ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_ticket foreign key (ticket_numero, tipo_comprobante_id,sucursal_nombre, ticket_fecha_y_hora) references FURIOUS_QUERYING.TICKET (numero, tipo_comprobante_id, sucursal_nombre, fecha_y_hora)
-ALTER TABLE FURIOUS_QUERYING.PAGO add constraint fk_descuento foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
 
 ALTER TABLE FURIOUS_QUERYING.DETALLE_PAGO add constraint fk_cliente_id_por_detalle_pago foreign key (cliente_id) references FURIOUS_QUERYING.CLIENTE (id)
 ALTER TABLE FURIOUS_QUERYING.DETALLE_PAGO add constraint fk_tarjeta_numero foreign key (tarjeta_numero) references FURIOUS_QUERYING.TARJETA (numero)
@@ -254,6 +258,9 @@ ALTER TABLE FURIOUS_QUERYING.MEDIO_DE_PAGO add constraint fk_tipo_medio_de_pago_
 
 ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO add constraint fk_medio_de_pago_codigo foreign key (medio_de_pago_codigo) references FURIOUS_QUERYING.MEDIO_DE_PAGO (codigo)
 ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO add constraint fk_descuento_codigo_por_medio_de_pago foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
+
+ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint fk_descuento_codigo foreign key (descuento_codigo) references FURIOUS_QUERYING.DESCUENTO (codigo)
+ALTER TABLE FURIOUS_QUERYING.DESCUENTO_POR_PAGO add constraint fk_pago_numero foreign key (pago_numero) references FURIOUS_QUERYING.PAGO (numero)
 
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_sucursal_nombre_por_ticket foreign key (sucursal_nombre) references FURIOUS_QUERYING.SUCURSAL (nombre)
 ALTER TABLE FURIOUS_QUERYING.TICKET add constraint fk_caja foreign key (caja_numero,sucursal_nombre) references FURIOUS_QUERYING.CAJA (numero,sucursal_nombre)
@@ -541,8 +548,19 @@ INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO(medio_de_pago_codigo, d
                             SELECT DISTINCT mp.codigo, d.codigo
                             FROM gd_esquema.Maestra
                             JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.descripcion = PAGO_MEDIO_PAGO
-                            JOIN FURIOUS_QUERYING.DESCUENTO d ON d.descripcion = DESCUENTO_DESCRIPCION
+                            JOIN FURIOUS_QUERYING.DESCUENTO d ON d.codigo = DESCUENTO_CODIGO
                             WHERE PAGO_FECHA IS NOT NULL
+END
+
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
+AS BEGIN
+INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_PAGO(descuento_codigo,pago_numero)
+                            SELECT d.codigo, p.numero
+                            FROM FURIOUS_QUERYING.PAGO p
+                            JOIN FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO md ON p.medio_de_pago_codigo = md.medio_de_pago_codigo
+                            JOIN FURIOUS_QUERYING.DESCUENTO d on p.fecha_y_hora BETWEEN d.fecha_inicio AND d.fecha_fin
+                            AND md.descuento_codigo = d.codigo                        
 END
 
 GO
@@ -613,3 +631,4 @@ EXEC FURIOUS_QUERYING.MIGRAR_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_MEDIO_DE_PAGO;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM;
 EXEC FURIOUS_QUERYING.MIGRAR_ITEM_X_PROMOCION;
+EXEC FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO;

@@ -107,7 +107,6 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_ENVIO
     localidad_cliente_id DECIMAL(18,0),
     costo_envio DECIMAL(18,2),
     enviado_a_tiempo BIT,
-    desvio_tiempo_entrega DECIMAL(18,0),
     FOREIGN KEY (sucursal_id) REFERENCES FURIOUS_QUERYING.BI_SUCURSAL(id),
     FOREIGN KEY (tiempo_id) REFERENCES FURIOUS_QUERYING.BI_TIEMPO(id),
     FOREIGN KEY (rango_etario_cliente_id) REFERENCES FURIOUS_QUERYING.BI_RANGO_ETARIO(id),
@@ -308,7 +307,7 @@ AS BEGIN
 END
 
 GO
-CREATE FUNCTION FURIOUS_QUERYING.BI_SELECT_UBICACION_CLIENTE(@cliente_id DECIMAL(18,0))
+CREATE FUNCTION FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(@cliente_id DECIMAL(18,0))
 RETURNS DECIMAL(18,0)
 AS BEGIN
     DECLARE @resultado DECIMAL(18,0)
@@ -373,6 +372,17 @@ BEGIN
     RETURN @resultado;
 END
     
+GO 
+CREATE FUNCTION FURIOUS_QUERYING.ENVIADO_A_TIEMPO(@fecha_programada DATETIME, @fecha_entrega DATETIME)
+RETURNS BIT
+AS BEGIN
+    DECLARE @resultado BIT
+    IF @fecha_programada < @fecha_entrega
+        SET @resultado = 0;
+    ELSE 
+        SET @resultado = 1;
+    RETURN @resultado;
+END
 
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_VENTA
@@ -381,16 +391,16 @@ BEGIN
     INSERT INTO FURIOUS_QUERYING.BI_HECHOS_VENTA
         (
         turno_id,
-        tiempo_id ,
-        localidad_sucursal_id ,
-        sucursal_id ,
+        tiempo_id,
+        localidad_sucursal_id,
+        sucursal_id,
         rango_etario_empleado_id,
         tipo_caja_id,
         cantidad,
         descuento_aplicado_total,
         total
         )
-    SELECT 
+    SELECT DISTINCT 
         FURIOUS_QUERYING.BI_SELECT_TURNO(t.fecha_y_hora),
         FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),
         l.id,
@@ -401,12 +411,86 @@ BEGIN
         t.descuento_medio_de_pago_total + t.descuento_promociones_total,
         t.total
     FROM FURIOUS_QUERYING.TICKET t
-        JOIN FURIOUS_QUERYING.EMPLEADO e on e.id=t.empleado_id
+        JOIN FURIOUS_QUERYING.EMPLEADO e ON e.id = t.empleado_id
         JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = t.sucursal_nombre
         JOIN FURIOUS_QUERYING.BI_LOCALIDAD l ON l.id = s.localidad_id
-        JOIN FURIOUS_QUERYING.CAJA c ON c.numero = t.caja_numero
+        JOIN FURIOUS_QUERYING.CAJA c ON c.numero = t.caja_numero AND c.sucursal_nombre = t.sucursal_nombre
 END
 
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_ENVIO
+AS
+BEGIN
+    INSERT INTO FURIOUS_QUERYING.BI_HECHOS_ENVIO(
+    sucursal_id ,
+    tiempo_id ,
+    rango_etario_cliente_id,
+    localidad_cliente_id ,
+    costo_envio,
+    enviado_a_tiempo
+    )
+    SELECT
+        s.id,
+        FURIOUS_QUERYING.BI_SELECT_TIEMPO(e.fecha_entrega) ,
+        FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
+        FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(c.id),
+        e.costo,
+        FURIOUS_QUERYING.ENVIADO_A_TIEMPO(e.fecha_programada,e.fecha_entrega)
+    FROM FURIOUS_QUERYING.ENVIO e
+    JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = e.cliente_id
+    JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = e.sucursal_nombre 
+END
+
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PAGO
+AS
+BEGIN
+    INSERT INTO FURIOUS_QUERYING.BI_HECHOS_PAGO
+    (
+      sucursal_id,
+      tiempo_id,
+      rango_etario_cliente_id,
+      medio_de_pago_id,
+      descuento_aplicado,
+      cuotas,
+      importe  
+    )
+    SELECT 
+        s.id,
+        FURIOUS_QUERYING.BI_SELECT_TIEMPO(p.fecha_y_hora),
+        FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
+        p.medio_de_pago_codigo,
+        p.descuento_aplicado,
+        COALESCE(dp.cuotas,1),
+        p.importe
+    FROM FURIOUS_QUERYING.PAGO p
+    JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = p.sucursal_nombre
+    JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON mp.id = p.medio_de_pago_codigo
+    LEFT JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.id = p.detalle_pago_id
+    LEFT JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = dp.cliente_id
+END
+
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PROMOCIONES_APLICADAS
+AS
+BEGIN
+    INSERT INTO FURIOUS_QUERYING.BI_HECHOS_PROMOCIONES_APLICADAS
+        (tiempo_id,subcategoria_id,categoria_id,promo_aplicada_descuento,descripcion)
+    SELECT 
+    FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),
+    pr.subcategoria_id,
+	pr.categoria_id,
+	SUM(ixp.promo_aplicada_descuento),
+    p.descripcion
+    FROM FURIOUS_QUERYING.PROMOCION p
+    JOIN FURIOUS_QUERYING.ITEM_X_PROMOCION ixp ON p.codigo = ixp.codigo_promocion
+	JOIN FURIOUS_QUERYING.PRODUCTO pr ON pr.id = ixp.producto_id
+    JOIN FURIOUS_QUERYING.TICKET t ON t.numero = ixp.ticket_numero 
+	AND t.sucursal_nombre = ixp.sucursal_nombre 
+	AND t.tipo_comprobante_id = ixp.tipo_comprobante_id 
+	AND t.fecha_y_hora = ixp.ticket_fecha_y_hora
+	GROUP BY t.fecha_y_hora,pr.subcategoria_id,pr.categoria_id,p.descripcion
+END
 
 --===================================================EXECS============================================================= 
 
@@ -445,6 +529,15 @@ EXEC FURIOUS_QUERYING.BI_MIGRAR_TIPO_CAJA
 
 GO
 EXEC FURIOUS_QUERYING.BI_MIGRAR_HECHOS_VENTA
+
+GO
+EXEC FURIOUS_QUERYING.BI_MIGRAR_HECHOS_ENVIO
+
+GO
+EXEC FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PAGO
+
+GO
+EXEC FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PROMOCIONES_APLICADAS
 
 --===================================================VISTAS============================================================= 
 --1: Ticket Promedio mensual. Valor promedio de las ventas (en $) según la

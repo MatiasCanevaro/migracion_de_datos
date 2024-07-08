@@ -29,8 +29,6 @@ CREATE TABLE FURIOUS_QUERYING.BI_SUCURSAL
 (
     id DECIMAL(18,0) PRIMARY KEY identity(1,1),
     nombre VARCHAR(255),
-    localidad_id DECIMAL(18,0),
-    FOREIGN KEY (localidad_id) REFERENCES FURIOUS_QUERYING.BI_LOCALIDAD(id)
 );
 
 CREATE TABLE FURIOUS_QUERYING.BI_RANGO_ETARIO
@@ -55,8 +53,6 @@ CREATE TABLE FURIOUS_QUERYING.BI_MEDIO_DE_PAGO
 (
     id DECIMAL(18,0) PRIMARY KEY,
     descripcion VARCHAR(255),
-    tipo_medio_de_pago_id DECIMAL(18,0),
-    FOREIGN KEY (tipo_medio_de_pago_id) REFERENCES FURIOUS_QUERYING.BI_TIPO_MEDIO_DE_PAGO(id)
 );
 
 CREATE TABLE FURIOUS_QUERYING.BI_CATEGORIA
@@ -121,6 +117,7 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_PAGO
     tiempo_id DECIMAL(18,0),
     rango_etario_cliente_id DECIMAL(18,0),
     medio_de_pago_id DECIMAL(18,0),
+    tipo_medio_de_pago_id DECIMAL(18,0),
     descuento_aplicado DECIMAL(18,2),
     cuotas DECIMAL(18,0),
     importe DECIMAL(18,2),
@@ -128,6 +125,7 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_PAGO
     FOREIGN KEY (tiempo_id) REFERENCES FURIOUS_QUERYING.BI_TIEMPO(id),
     FOREIGN KEY (rango_etario_cliente_id) REFERENCES FURIOUS_QUERYING.BI_RANGO_ETARIO(id),
     FOREIGN KEY (medio_de_pago_id) REFERENCES FURIOUS_QUERYING.BI_MEDIO_DE_PAGO(id),
+    FOREIGN KEY (tipo_medio_de_pago_id) REFERENCES FURIOUS_QUERYING.BI_TIPO_MEDIO_DE_PAGO(id)
 );
 
 CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_PROMOCIONES_APLICADAS
@@ -215,8 +213,8 @@ CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_MEDIO_DE_PAGO
 AS
 BEGIN
     INSERT INTO FURIOUS_QUERYING.BI_MEDIO_DE_PAGO
-        (id,descripcion,tipo_medio_de_pago_id)
-    SELECT DISTINCT codigo,descripcion,tipo_medio_de_pago_id
+        (id,descripcion)
+    SELECT DISTINCT codigo,descripcion
     FROM FURIOUS_QUERYING.MEDIO_DE_PAGO 
 END
 
@@ -266,8 +264,8 @@ CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_SUCURSAL
 AS
 BEGIN
     INSERT INTO FURIOUS_QUERYING.BI_SUCURSAL
-        (nombre, localidad_id)
-    SELECT DISTINCT nombre, localidad_id
+        (nombre)
+    SELECT DISTINCT nombre
     FROM FURIOUS_QUERYING.SUCURSAL
 END
 
@@ -292,18 +290,6 @@ AS BEGIN
 CASE WHEN MONTH(@fecha_y_hora) BETWEEN 1 AND 4 THEN 1
                  WHEN MONTH(@fecha_y_hora) BETWEEN 5 AND 8 THEN 2
                  WHEN MONTH(@fecha_y_hora) BETWEEN 9 AND 12 THEN 3 END
-    RETURN @resultado
-END
-
-GO
-CREATE FUNCTION FURIOUS_QUERYING.BI_SELECT_UBICACION(@sucursal_nombre VARCHAR(255))
-RETURNS DECIMAL(18,0)
-AS BEGIN
-    DECLARE @resultado DECIMAL(18,0)
-    SELECT @resultado = u.id
-    FROM FURIOUS_QUERYING.BI_SUCURSAL s
-	JOIN FURIOUS_QUERYING.BI_LOCALIDAD u ON u.id = s.localidad_id 
-    WHERE s.nombre = @sucursal_nombre
     RETURN @resultado
 END
 
@@ -411,8 +397,8 @@ BEGIN
     SELECT DISTINCT 
         FURIOUS_QUERYING.BI_SELECT_TURNO(t.fecha_y_hora),
         FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),
-        l.id,
-        s.id,
+        s.localidad_id,
+        s2.id,
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(e.fecha_nacimiento),
         c.tipo_caja_id,
         FURIOUS_QUERYING.CANTIDAD_ITEMS(t.numero,t.sucursal_nombre,t.tipo_comprobante_id,t.fecha_y_hora),
@@ -420,8 +406,8 @@ BEGIN
         t.total
     FROM FURIOUS_QUERYING.TICKET t
         JOIN FURIOUS_QUERYING.EMPLEADO e ON e.id = t.empleado_id
-        JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = t.sucursal_nombre
-        JOIN FURIOUS_QUERYING.BI_LOCALIDAD l ON l.id = s.localidad_id
+        JOIN FURIOUS_QUERYING.SUCURSAL s ON s.nombre = t.sucursal_nombre
+		JOIN FURIOUS_QUERYING.BI_SUCURSAL s2 ON s.nombre = s2.nombre
         JOIN FURIOUS_QUERYING.CAJA c ON c.numero = t.caja_numero AND c.sucursal_nombre = t.sucursal_nombre
 END
 
@@ -459,21 +445,24 @@ BEGIN
       tiempo_id,
       rango_etario_cliente_id,
       medio_de_pago_id,
+      tipo_medio_de_pago_id,
       descuento_aplicado,
       cuotas,
       importe  
     )
     SELECT 
-        s.id,
+        s2.id,
         FURIOUS_QUERYING.BI_SELECT_TIEMPO(p.fecha_y_hora),
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         p.medio_de_pago_codigo,
+        mp.tipo_medio_de_pago_id,
         p.descuento_aplicado,
         dp.cuotas,
         p.importe
     FROM FURIOUS_QUERYING.PAGO p
-    JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = p.sucursal_nombre
-    JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON mp.id = p.medio_de_pago_codigo
+    JOIN FURIOUS_QUERYING.SUCURSAL s ON s.nombre = p.sucursal_nombre
+	JOIN FURIOUS_QUERYING.BI_SUCURSAL s2 ON s.nombre = s2.nombre    
+	JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.codigo = p.medio_de_pago_codigo
     LEFT JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.id = p.detalle_pago_id
     LEFT JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = dp.cliente_id
 END

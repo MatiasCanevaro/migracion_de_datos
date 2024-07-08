@@ -422,16 +422,16 @@ CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_ENVIO
 AS
 BEGIN
     INSERT INTO FURIOUS_QUERYING.BI_HECHOS_ENVIO(
-    sucursal_id ,
-    tiempo_id ,
+    sucursal_id,
+    tiempo_id,
     rango_etario_cliente_id,
-    localidad_cliente_id ,
+    localidad_cliente_id,
     costo_envio,
     enviado_a_tiempo
     )
     SELECT
         s.id,
-        FURIOUS_QUERYING.BI_SELECT_TIEMPO(e.fecha_entrega) ,
+        FURIOUS_QUERYING.BI_SELECT_TIEMPO(e.fecha_entrega),
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(c.id),
         e.costo,
@@ -561,7 +561,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.CANTIDAD_UNIDADES_PROMEDIO
 AS
-    SELECT AVG(v.cantidad) 'Unidades promedio por ticket', tu.turno, ti.cuatrimestre AS 'Cuatrimestre', ti.anio AS 'Año'
+    SELECT AVG(v.cantidad) 'Unidades promedio por ticket', tu.turno AS 'Turno', ti.cuatrimestre AS 'Cuatrimestre', ti.anio AS 'Año'
     FROM FURIOUS_QUERYING.BI_HECHOS_VENTA v
     JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON v.tiempo_id = ti.id
     JOIN FURIOUS_QUERYING.BI_TURNO tu ON tu.id = v.turno_id
@@ -574,7 +574,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_VENTAS_X_RANGO_ETARIO
 AS
-    SELECT SUM(v.total)/(SELECT SUM(total) FROM FURIOUS_QUERYING.BI_HECHOS_VENTA) * 100 AS 'Porcentaje de ventas',r.rango,tc.tipo,ti.cuatrimestre,ti.anio AS 'Año'
+    SELECT SUM(v.total)/(SELECT SUM(total) FROM FURIOUS_QUERYING.BI_HECHOS_VENTA) * 100 AS 'Porcentaje de ventas',r.rango AS 'Rango',tc.tipo AS 'Tipo',ti.cuatrimestre AS 'Cuatrimestre',ti.anio AS 'Año'
     FROM FURIOUS_QUERYING.BI_HECHOS_VENTA v
     JOIN FURIOUS_QUERYING.BI_RANGO_ETARIO r ON r.id=v.rango_etario_empleado_id
     JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON v.tiempo_id=ti.id
@@ -608,7 +608,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.CATEGORIAS_CON_MAYOR_DESCUENTO
 AS
-    SELECT categoria_id, anio AS 'Año', cuatrimestre AS 'Cuatrimestre', total_descuento
+    SELECT categoria_id, anio AS 'Año', cuatrimestre AS 'Cuatrimestre', total_descuento AS 'Total descuento'
     FROM (
     SELECT p.categoria_id, ti.anio, ti.cuatrimestre,
             SUM(p.promo_aplicada_descuento) AS total_descuento,
@@ -616,7 +616,7 @@ AS
         ) AS rn
         FROM FURIOUS_QUERYING.BI_HECHOS_PROMOCIONES_APLICADAS p
             JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON ti.id = p.tiempo_id            
-        GROUP BY  p.categoria_id,ti.anio, ti.cuatrimestre
+        GROUP BY p.categoria_id,ti.anio, ti.cuatrimestre
 ) AS RankedCategories
     WHERE rn <= 3;
     
@@ -650,7 +650,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.LOCALIDADES_MAYOR_COSTO_ENVIO
 AS
-    SELECT TOP 5 e.costo_envio, l.localidad_nombre
+    SELECT TOP 5 e.costo_envio AS 'Costo de envío', l.localidad_nombre AS 'Nombre de la localidad'
     FROM FURIOUS_QUERYING.BI_HECHOS_ENVIO e JOIN FURIOUS_QUERYING.BI_LOCALIDAD l ON e.localidad_cliente_id = l.id
 	ORDER BY e.costo_envio DESC
 	
@@ -663,10 +663,10 @@ CREATE VIEW FURIOUS_QUERYING.SUCURSALES_MAYOR_IMPORTE_EN_CUOTAS
 AS
  SELECT 
         Importe, 
-        nombre, 
-        descripcion, 
-        mes, 
-        anio
+        nombre AS 'Nombre de la sucursal', 
+        descripcion AS 'Descripción', 
+        mes AS 'Mes', 
+        anio AS 'Año'
     FROM (
         SELECT 
             SUM(p.importe) AS Importe, 
@@ -710,7 +710,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_DESCUENTO_POR_MEDIO_DE_PAGO
 AS
-    SELECT SUM(p.descuento_aplicado) / SUM(p.importe + p.descuento_aplicado)  * 100 AS 'Porcentaje de descuento', mp.descripcion, t.cuatrimestre AS 'Cuatrimestre'
+    SELECT SUM(p.descuento_aplicado) / SUM(p.importe + p.descuento_aplicado)  * 100 AS 'Porcentaje de descuento', mp.descripcion AS 'Descripción', t.cuatrimestre AS 'Cuatrimestre'
     FROM FURIOUS_QUERYING.BI_HECHOS_PAGO p
     JOIN FURIOUS_QUERYING.BI_TIEMPO t ON t.id = p.tiempo_id
     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON mp.id = p.medio_de_pago_id

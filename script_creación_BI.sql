@@ -24,6 +24,7 @@ CREATE TABLE FURIOUS_QUERYING.BI_LOCALIDAD
     FOREIGN KEY(provincia_id) REFERENCES FURIOUS_QUERYING.BI_PROVINCIA(id)
 );
 
+
 CREATE TABLE FURIOUS_QUERYING.BI_SUCURSAL
 (
     id DECIMAL(18,0) PRIMARY KEY identity(1,1),
@@ -373,14 +374,21 @@ BEGIN
 END
     
 GO 
-CREATE FUNCTION FURIOUS_QUERYING.ENVIADO_A_TIEMPO(@fecha_programada DATETIME, @fecha_entrega DATETIME)
+CREATE FUNCTION FURIOUS_QUERYING.ENVIADO_A_TIEMPO(@hora_inicio DECIMAL(18,0), @hora_fin DECIMAL(18,0), @fecha_programada DATETIME, @fecha_entrega DATETIME)
 RETURNS BIT
 AS BEGIN
     DECLARE @resultado BIT
-    IF @fecha_programada < @fecha_entrega
-        SET @resultado = 0;
+    IF CAST(@fecha_programada AS DATE)  = CAST(@fecha_entrega AS DATE)
+	BEGIN
+        DECLARE @hora_entrega DECIMAL(18,0);
+        SET @hora_entrega = DATEPART(HOUR, @fecha_entrega);
+        IF @hora_entrega BETWEEN @hora_inicio AND @hora_fin
+		BEGIN
+		SET @resultado = 1;
+		END;
+	END;
     ELSE 
-        SET @resultado = 1;
+        SET @resultado = 0;
     RETURN @resultado;
 END
 
@@ -435,7 +443,7 @@ BEGIN
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(c.id),
         e.costo,
-        FURIOUS_QUERYING.ENVIADO_A_TIEMPO(e.fecha_programada,e.fecha_entrega)
+        FURIOUS_QUERYING.ENVIADO_A_TIEMPO(e.hora_inicio_programada, e.hora_fin_programada, e.fecha_programada,e.fecha_entrega)
     FROM FURIOUS_QUERYING.ENVIO e
     JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = e.cliente_id
     JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = e.sucursal_nombre 
@@ -625,11 +633,12 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_ENVIOS_CUMPLIDOS_A_TIEMPO
 AS
-    SELECT (SELECT COUNT(*) FROM FURIOUS_QUERYING.BI_HECHOS_ENVIO e2 WHERE e2.enviado_a_tiempo = 1) / COUNT(e.id) *100 AS 'Porcentaje de cumplimiento', t.mes AS 'Mes', t.anio AS 'Año'
+    SELECT COUNT(CASE WHEN e.enviado_a_tiempo = 1 THEN 1 END) *100 / CAST(COUNT(e.id) AS decimal(18,2)) AS 'Porcentaje de cumplimiento', t.mes AS 'Mes', t.anio AS 'Año', s.nombre 'Nombre Sucursal'
     FROM FURIOUS_QUERYING.BI_HECHOS_ENVIO e
     JOIN FURIOUS_QUERYING.BI_TIEMPO t ON e.tiempo_id = t.id
-    GROUP BY t.mes, t.anio
- 
+	JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.id = e.sucursal_id
+    GROUP BY t.mes, t.anio, s.nombre
+
 --8: Cantidad de envíos por rango etario de clientes para cada cuatrimestre de
 --cada año
 

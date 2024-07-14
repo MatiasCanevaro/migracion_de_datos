@@ -551,7 +551,7 @@ INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO(medio_de_pago_codigo, d
                             JOIN FURIOUS_QUERYING.DESCUENTO d ON d.codigo = DESCUENTO_CODIGO
                             WHERE PAGO_FECHA IS NOT NULL
 END
-
+/*
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
 AS BEGIN
@@ -561,6 +561,20 @@ INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_PAGO(descuento_codigo,pago_numero)
                             JOIN FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO md ON p.medio_de_pago_codigo = md.medio_de_pago_codigo
                             JOIN FURIOUS_QUERYING.DESCUENTO d on p.fecha_y_hora BETWEEN d.fecha_inicio AND d.fecha_fin
                             AND md.descuento_codigo = d.codigo                        
+END
+*/
+
+GO
+CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
+AS BEGIN
+INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_PAGO(descuento_codigo,pago_numero)
+                            SELECT m.DESCUENTO_CODIGO, p.numero
+                            FROM gd_esquema.Maestra m
+                            JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.descripcion = m.PAGO_MEDIO_PAGO
+                            JOIN FURIOUS_QUERYING.TIPO_COMPROBANTE tp ON tp.tipo_comprobante = m.TICKET_TIPO_COMPROBANTE
+                            JOIN FURIOUS_QUERYING.PAGO p ON p.ticket_numero = m.TICKET_NUMERO AND p.ticket_fecha_y_hora = m.TICKET_FECHA_HORA
+                                AND p.sucursal_nombre = m.SUCURSAL_NOMBRE AND p.medio_de_pago_codigo = mp.codigo AND p.tipo_comprobante_id = tp.id
+                                AND p.fecha_y_hora = m.PAGO_FECHA
 END
 
 GO

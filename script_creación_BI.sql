@@ -84,7 +84,8 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_VENTA
     sucursal_id DECIMAL(18,0),
     rango_etario_empleado_id DECIMAL(18,0),
     tipo_caja_id DECIMAL(18,0),
-    cantidad DECIMAL(18,0),
+    cantidad_items DECIMAL(18,0),
+	cantidad_ventas DECIMAL(18,0),
     descuento_aplicado_total DECIMAL(18,2),
     total DECIMAL(18,2),
     FOREIGN KEY (turno_id) REFERENCES FURIOUS_QUERYING.BI_TURNO(id),
@@ -103,7 +104,8 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_ENVIO
     rango_etario_cliente_id DECIMAL(18,0),
     localidad_cliente_id DECIMAL(18,0),
     costo_envio DECIMAL(18,2),
-    enviado_a_tiempo BIT,
+    enviados_a_tiempo DECIMAL(18,0),
+    total_enviados DECIMAL(18,0),
     FOREIGN KEY (sucursal_id) REFERENCES FURIOUS_QUERYING.BI_SUCURSAL(id),
     FOREIGN KEY (tiempo_id) REFERENCES FURIOUS_QUERYING.BI_TIEMPO(id),
     FOREIGN KEY (rango_etario_cliente_id) REFERENCES FURIOUS_QUERYING.BI_RANGO_ETARIO(id),
@@ -135,7 +137,6 @@ CREATE TABLE FURIOUS_QUERYING.BI_HECHOS_PROMOCIONES_APLICADAS
     subcategoria_id VARCHAR(255),
     categoria_id VARCHAR(255),
     promo_aplicada_descuento DECIMAL(18,2),
-    descripcion VARCHAR(255),
     FOREIGN KEY (tiempo_id) REFERENCES FURIOUS_QUERYING.BI_TIEMPO(id),
     FOREIGN KEY (subcategoria_id,categoria_id) REFERENCES FURIOUS_QUERYING.BI_SUBCATEGORIA(id,categoria_id)
 );
@@ -361,9 +362,9 @@ END
     
 GO 
 CREATE FUNCTION FURIOUS_QUERYING.ENVIADO_A_TIEMPO(@hora_inicio DECIMAL(18,0), @hora_fin DECIMAL(18,0), @fecha_programada DATETIME, @fecha_entrega DATETIME)
-RETURNS BIT
+RETURNS INT
 AS BEGIN
-    DECLARE @resultado BIT
+    DECLARE @resultado INT
     IF CAST(@fecha_programada AS DATE)  = CAST(@fecha_entrega AS DATE)
 	BEGIN
         DECLARE @hora_entrega DECIMAL(18,0);
@@ -382,6 +383,27 @@ GO
 CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_VENTA
 AS
 BEGIN
+    WITH temp_table AS (
+    SELECT 
+        t.fecha_y_hora,
+        t.numero,
+        t.sucursal_nombre,
+        t.tipo_comprobante_id,
+        t.fecha_y_hora AS fecha_y_hora2,
+        t.descuento_medio_de_pago_total,
+        t.descuento_promociones_total,
+        t.total,
+        e.fecha_nacimiento,
+        s.localidad_id,
+        s2.id AS sucursal_id,
+        c.tipo_caja_id,
+        FURIOUS_QUERYING.CANTIDAD_ITEMS(t.numero, t.sucursal_nombre, t.tipo_comprobante_id, t.fecha_y_hora) AS cantidad_items
+    FROM FURIOUS_QUERYING.TICKET t
+    JOIN FURIOUS_QUERYING.EMPLEADO e ON e.id = t.empleado_id
+    JOIN FURIOUS_QUERYING.SUCURSAL s ON s.nombre = t.sucursal_nombre
+    JOIN FURIOUS_QUERYING.BI_SUCURSAL s2 ON s.nombre = s2.nombre
+    JOIN FURIOUS_QUERYING.CAJA c ON c.numero = t.caja_numero AND c.sucursal_nombre = t.sucursal_nombre
+)
     INSERT INTO FURIOUS_QUERYING.BI_HECHOS_VENTA
         (
         turno_id,
@@ -390,25 +412,30 @@ BEGIN
         sucursal_id,
         rango_etario_empleado_id,
         tipo_caja_id,
-        cantidad,
+        cantidad_items,
+		cantidad_ventas,
         descuento_aplicado_total,
         total
         )
-    SELECT DISTINCT 
-        FURIOUS_QUERYING.BI_SELECT_TURNO(t.fecha_y_hora),
-        FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),
-        s.localidad_id,
-        s2.id,
-        FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(e.fecha_nacimiento),
-        c.tipo_caja_id,
-        FURIOUS_QUERYING.CANTIDAD_ITEMS(t.numero,t.sucursal_nombre,t.tipo_comprobante_id,t.fecha_y_hora),
-        t.descuento_medio_de_pago_total + t.descuento_promociones_total,
-        t.total
-    FROM FURIOUS_QUERYING.TICKET t
-        JOIN FURIOUS_QUERYING.EMPLEADO e ON e.id = t.empleado_id
-        JOIN FURIOUS_QUERYING.SUCURSAL s ON s.nombre = t.sucursal_nombre
-		JOIN FURIOUS_QUERYING.BI_SUCURSAL s2 ON s.nombre = s2.nombre
-        JOIN FURIOUS_QUERYING.CAJA c ON c.numero = t.caja_numero AND c.sucursal_nombre = t.sucursal_nombre
+SELECT DISTINCT 
+    FURIOUS_QUERYING.BI_SELECT_TURNO(tt.fecha_y_hora),
+    FURIOUS_QUERYING.BI_SELECT_TIEMPO(tt.fecha_y_hora),
+    tt.localidad_id,
+    tt.sucursal_id,
+    FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(tt.fecha_nacimiento),
+    tt.tipo_caja_id,
+    SUM(tt.cantidad_items),
+	COUNT(*),
+    SUM(tt.descuento_medio_de_pago_total + tt.descuento_promociones_total),
+    SUM(tt.total)
+FROM temp_table tt
+GROUP BY 
+    FURIOUS_QUERYING.BI_SELECT_TURNO(tt.fecha_y_hora),
+    FURIOUS_QUERYING.BI_SELECT_TIEMPO(tt.fecha_y_hora),
+    tt.localidad_id,
+    tt.sucursal_id,
+    FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(tt.fecha_nacimiento),
+    tt.tipo_caja_id
 END
 
 GO
@@ -421,18 +448,22 @@ BEGIN
     rango_etario_cliente_id,
     localidad_cliente_id,
     costo_envio,
-    enviado_a_tiempo
+    enviados_a_tiempo,
+    total_enviados
     )
     SELECT
         s.id,
         FURIOUS_QUERYING.BI_SELECT_TIEMPO(e.fecha_entrega),
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(c.id),
-        e.costo,
-        FURIOUS_QUERYING.ENVIADO_A_TIEMPO(e.hora_inicio_programada, e.hora_fin_programada, e.fecha_programada,e.fecha_entrega)
+        SUM(e.costo),
+        SUM(FURIOUS_QUERYING.ENVIADO_A_TIEMPO(e.hora_inicio_programada, e.hora_fin_programada, e.fecha_programada,e.fecha_entrega)),
+        COUNT(e.numero)
     FROM FURIOUS_QUERYING.ENVIO e
     JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = e.cliente_id
-    JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = e.sucursal_nombre 
+    JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.nombre = e.sucursal_nombre
+    GROUP BY s.id,FURIOUS_QUERYING.BI_SELECT_TIEMPO(e.fecha_entrega), FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
+    FURIOUS_QUERYING.BI_SELECT_LOCALIDAD_CLIENTE(c.id)
 END
 
 GO
@@ -456,15 +487,17 @@ BEGIN
         FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
         p.medio_de_pago_codigo,
         mp.tipo_medio_de_pago_id,
-        p.descuento_aplicado,
-        dp.cuotas,
-        p.importe
+        SUM(p.descuento_aplicado),
+        SUM(dp.cuotas),
+        SUM(p.importe)
     FROM FURIOUS_QUERYING.PAGO p
     JOIN FURIOUS_QUERYING.SUCURSAL s ON s.nombre = p.sucursal_nombre
 	JOIN FURIOUS_QUERYING.BI_SUCURSAL s2 ON s.nombre = s2.nombre    
 	JOIN FURIOUS_QUERYING.MEDIO_DE_PAGO mp ON mp.codigo = p.medio_de_pago_codigo
     LEFT JOIN FURIOUS_QUERYING.DETALLE_PAGO dp ON dp.id = p.detalle_pago_id
     LEFT JOIN FURIOUS_QUERYING.CLIENTE c ON c.id = dp.cliente_id
+    GROUP BY s2.id, FURIOUS_QUERYING.BI_SELECT_TIEMPO(p.fecha_y_hora), FURIOUS_QUERYING.BI_SELECT_RANGO_ETARIO(c.fecha_nacimiento),
+            p.medio_de_pago_codigo, mp.tipo_medio_de_pago_id
 END
 
 GO
@@ -472,13 +505,12 @@ CREATE PROCEDURE FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PROMOCIONES_APLICADAS
 AS
 BEGIN
     INSERT INTO FURIOUS_QUERYING.BI_HECHOS_PROMOCIONES_APLICADAS
-        (tiempo_id,subcategoria_id,categoria_id,promo_aplicada_descuento,descripcion)
+        (tiempo_id,subcategoria_id,categoria_id,promo_aplicada_descuento)
     SELECT 
     FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),
     pr.subcategoria_id,
 	pr.categoria_id,
-	SUM(ixp.promo_aplicada_descuento),
-    p.descripcion
+	SUM(ixp.promo_aplicada_descuento)
     FROM FURIOUS_QUERYING.PROMOCION p
     JOIN FURIOUS_QUERYING.ITEM_X_PROMOCION ixp ON p.codigo = ixp.codigo_promocion
 	JOIN FURIOUS_QUERYING.PRODUCTO pr ON pr.id = ixp.producto_id
@@ -486,8 +518,9 @@ BEGIN
 	AND t.sucursal_nombre = ixp.sucursal_nombre 
 	AND t.tipo_comprobante_id = ixp.tipo_comprobante_id 
 	AND t.fecha_y_hora = ixp.ticket_fecha_y_hora
-	GROUP BY t.fecha_y_hora,pr.subcategoria_id,pr.categoria_id,p.descripcion
+	GROUP BY FURIOUS_QUERYING.BI_SELECT_TIEMPO(t.fecha_y_hora),pr.subcategoria_id,pr.categoria_id
 END
+
 
 --===================================================EXECS============================================================= 
 
@@ -544,7 +577,7 @@ EXEC FURIOUS_QUERYING.BI_MIGRAR_HECHOS_PROMOCIONES_APLICADAS
 GO
 CREATE VIEW FURIOUS_QUERYING.TICKET_PROMEDIO_MENSUAL
 AS
-    SELECT SUM(v.total) / COUNT(DISTINCT v.id) AS ValorPromedioVenta, l.localidad_nombre AS Localidad, t.anio AS 'Año', t.mes AS Mes
+    SELECT SUM(v.total) / SUM(v.cantidad_ventas) AS ValorPromedioVenta, l.localidad_nombre AS Localidad, t.anio AS 'Año', t.mes AS Mes
     FROM FURIOUS_QUERYING.BI_HECHOS_VENTA v JOIN FURIOUS_QUERYING.BI_LOCALIDAD l ON (v.localidad_sucursal_id = l.id)
         JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)
     GROUP BY l.localidad_nombre,t.anio,t.mes
@@ -558,7 +591,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.CANTIDAD_UNIDADES_PROMEDIO
 AS
-    SELECT AVG(v.cantidad) 'Unidades promedio por ticket', tu.turno AS 'Turno', ti.cuatrimestre AS 'Cuatrimestre', ti.anio AS 'Año'
+    SELECT SUM(v.cantidad_items)/SUM(v.cantidad_ventas) 'Unidades promedio por ticket', tu.turno AS 'Turno', ti.cuatrimestre AS 'Cuatrimestre', ti.anio AS 'Año'
     FROM FURIOUS_QUERYING.BI_HECHOS_VENTA v
     JOIN FURIOUS_QUERYING.BI_TIEMPO ti ON v.tiempo_id = ti.id
     JOIN FURIOUS_QUERYING.BI_TURNO tu ON tu.id = v.turno_id
@@ -583,7 +616,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.CANTIDAD_VENTAS_POR_TURNO
 AS
-	SELECT COUNT(v.id) AS 'Cantidad de ventas' , t.anio AS 'Año', t.mes AS 'Mes', tu.turno AS 'Turno'
+	SELECT SUM(v.cantidad_ventas) AS 'Cantidad de ventas' , t.anio AS 'Año', t.mes AS 'Mes', tu.turno AS 'Turno'
 	FROM FURIOUS_QUERYING.BI_HECHOS_VENTA v
 	JOIN FURIOUS_QUERYING.BI_TIEMPO t ON (v.tiempo_id = t.id)
 	JOIN FURIOUS_QUERYING.BI_TURNO tu ON (tu.id = v.turno_id)
@@ -622,7 +655,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.PORCENTAJE_ENVIOS_CUMPLIDOS_A_TIEMPO
 AS
-    SELECT COUNT(CASE WHEN e.enviado_a_tiempo = 1 THEN 1 END) *100 / CAST(COUNT(e.id) AS decimal(18,2)) AS 'Porcentaje de cumplimiento', t.mes AS 'Mes', t.anio AS 'Año', s.nombre 'Nombre Sucursal'
+    SELECT SUM(e.enviados_a_tiempo) * 100 / SUM(e.total_enviados) AS 'Porcentaje de cumplimiento', t.mes AS 'Mes', t.anio AS 'Año', s.nombre 'Nombre Sucursal'
     FROM FURIOUS_QUERYING.BI_HECHOS_ENVIO e
     JOIN FURIOUS_QUERYING.BI_TIEMPO t ON e.tiempo_id = t.id
 	JOIN FURIOUS_QUERYING.BI_SUCURSAL s ON s.id = e.sucursal_id
@@ -634,7 +667,7 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.CANT_ENVIOS_RANGO_ETARIO_CLIENTES
 AS
-    SELECT COUNT(*) as 'Cantidad de Envios Por Rango Etario',
+    SELECT SUM(e.total_enviados) as 'Cantidad de Envios Por Rango Etario',
     r.rango AS 'Rango',
     t.cuatrimestre AS 'Cuatrimestre',
     t.anio AS 'Año'
@@ -648,9 +681,12 @@ AS
 GO
 CREATE VIEW FURIOUS_QUERYING.LOCALIDADES_MAYOR_COSTO_ENVIO
 AS
-    SELECT TOP 5 e.costo_envio AS 'Costo de envío', l.localidad_nombre AS 'Nombre de la localidad'
+    SELECT TOP 5  (SUM(e.costo_envio)/ SUM(e.total_enviados)) AS 'Costo de envío', l.localidad_nombre AS 'Nombre de la localidad'
     FROM FURIOUS_QUERYING.BI_HECHOS_ENVIO e JOIN FURIOUS_QUERYING.BI_LOCALIDAD l ON e.localidad_cliente_id = l.id
-	ORDER BY e.costo_envio DESC
+	GROUP BY l.localidad_nombre, e.localidad_cliente_id
+	ORDER BY (SUM(e.costo_envio)/ SUM(e.total_enviados)) DESC
+
+
 	
 --10: Las 3 sucursales con el mayor importe de pagos en cuotas, según el medio de
 --pago, mes y año. Se calcula sumando los importes totales de todas las ventas en
@@ -713,4 +749,3 @@ AS
     JOIN FURIOUS_QUERYING.BI_TIEMPO t ON t.id = p.tiempo_id
     JOIN FURIOUS_QUERYING.BI_MEDIO_DE_PAGO mp ON mp.id = p.medio_de_pago_id
     GROUP BY mp.descripcion, t.cuatrimestre
-	

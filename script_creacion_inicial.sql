@@ -551,18 +551,6 @@ INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO(medio_de_pago_codigo, d
                             JOIN FURIOUS_QUERYING.DESCUENTO d ON d.codigo = DESCUENTO_CODIGO
                             WHERE PAGO_FECHA IS NOT NULL
 END
-/*
-GO
-CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
-AS BEGIN
-INSERT INTO FURIOUS_QUERYING.DESCUENTO_POR_PAGO(descuento_codigo,pago_numero)
-                            SELECT d.codigo, p.numero
-                            FROM FURIOUS_QUERYING.PAGO p
-                            JOIN FURIOUS_QUERYING.DESCUENTO_POR_MEDIO_DE_PAGO md ON p.medio_de_pago_codigo = md.medio_de_pago_codigo
-                            JOIN FURIOUS_QUERYING.DESCUENTO d on p.fecha_y_hora BETWEEN d.fecha_inicio AND d.fecha_fin
-                            AND md.descuento_codigo = d.codigo                        
-END
-*/
 
 GO
 CREATE PROCEDURE FURIOUS_QUERYING.MIGRAR_DESCUENTO_POR_PAGO
